@@ -1,4 +1,4 @@
-This is the Intel staging area for llvm.org contributions and the home for
+his is the Intel staging area for llvm.org contributions and the home for
 Intel LLVM-based projects:
 
 - [oneAPI DPC++ compiler](#oneapi-dpc-compiler)
