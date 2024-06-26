@@ -9,6 +9,7 @@ on:
     - sycl
     - sycl-devops-pr/**
     - sycl-rel-**
+    - burner
     # Do not run builds if changes are only in the following locations
     paths-ignore:
     - '.github/ISSUE_TEMPLATE/**'
