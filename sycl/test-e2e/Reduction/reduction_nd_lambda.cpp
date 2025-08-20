@@ -8,9 +8,13 @@
 
 using namespace sycl;
 
-struct AllIdOp {
-  constexpr bool operator()(size_t Idx) const { return true; }
-};
+// struct AllIdOp {
+//   constexpr bool operator()(size_t Idx) const { return true; }
+// };
+
+bool filterFunc(size_t Idx) const {
+  return true;
+}
 
 template <typename T, access::mode M> class MName;
 
@@ -24,7 +28,6 @@ void tests(queue &Q, T Identity, T Init, BinaryOperation BOp, size_t WGSize,
 
   // Initialize.
   std::optional<T> CorrectOut;
-  AllIdOp IdFilterFunc = {};
 
   // The value assigned here must be discarded (if IsReadWrite is true).
   // Verify that it is really discarded and assign some value.
@@ -35,31 +38,25 @@ void tests(queue &Q, T Identity, T Init, BinaryOperation BOp, size_t WGSize,
   host_accessor In_h(InBuf, write_only);
   for (int I = 0; I < N; ++I) {
     In_h[I] = ((I + 1) % 5) + 1.1;
-    if (IdFilterFunc(I))
-      ExpectedOut = ExpectedOut ? BOp(*ExpectedOut, In_h[I]) : In_h[I];
+    if (filterFunc(I))
+      CorrectOut = CorrectOut ? BOp(*CorrectOut, In_h[I]) : In_h[I];
   }
   CorrectOut = CorrectOut ? BOp(*CorrectOut, Init) : Init;
 
   // Compute.
   Q.submit([&](handler &CGH) {
-     // Helper for creating the reductions depending on the existance of an
-     // identity.
-     auto CreateReduction = [&]() {
-        return reduction(ReduVarPtr, BOp, PropList);
-     };
-
      auto In = InBuf.template get_access<access::mode::read>(CGH);
-     auto Redu = CreateReduction();
-    CGH.parallel_for<Name>(Range, Redu, [=](nd_item<Dims> NDIt, auto &Sum) {
-      if (IdFilterFunc(NDIt.get_global_linear_id()))
-        Sum.combine(In[NDIt.get_global_linear_id()]);
-    });
+     auto Redu = reduction(OutBuf, CGH, BOp, {});
+     CGH.parallel_for<Name>(NDRange, Redu, [=](nd_item<1> NDIt, auto &Sum) {
+       if (filterFunc(NDIt.get_global_linear_id()))
+         Sum.combine(In[NDIt.get_global_linear_id()]);
+     });
    }).wait();
 
   // Check correctness.
   host_accessor Out(OutBuf, read_only);
   T ComputedOut = *(Out.get_pointer());
-  return checkResults(Q, BOp, Range, ComputedOut, *CorrectOut);
+  checkResults(Q, BOp, NDRange, ComputedOut, *CorrectOut);
 
   //test<KName<Name, true>>(Q, Identity, Init, BOp, NDRange);
 }
