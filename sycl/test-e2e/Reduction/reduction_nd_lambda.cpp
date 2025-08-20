@@ -12,7 +12,7 @@ using namespace sycl;
 //   constexpr bool operator()(size_t Idx) const { return true; }
 // };
 
-bool filterFunc(size_t Idx) const {
+const bool filterFunc(const size_t Idx) {
   return true;
 }
 
