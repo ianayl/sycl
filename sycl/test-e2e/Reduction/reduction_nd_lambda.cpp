@@ -8,6 +8,10 @@
 
 using namespace sycl;
 
+struct AllIdOp {
+  constexpr bool operator()(size_t Idx) const { return true; }
+};
+
 template <typename T, access::mode M> class MName;
 
 template <typename Name, typename T, class BinaryOperation>
@@ -20,7 +24,7 @@ void tests(queue &Q, T Identity, T Init, BinaryOperation BOp, size_t WGSize,
 
   // Initialize.
   std::optional<T> CorrectOut;
-  IdFilterFuncT IdFilterFunc = {}
+  AllIdOp IdFilterFunc = {};
 
   // The value assigned here must be discarded (if IsReadWrite is true).
   // Verify that it is really discarded and assign some value.
