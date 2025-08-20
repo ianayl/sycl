@@ -4,67 +4,46 @@
 
 // This test performs basic checks of parallel_for(nd_range, reduction, lambda)
 
-#include "reduction_utils.hpp"
+#include <sycl/sycl.hpp>
 
 using namespace sycl;
 
-// struct AllIdOp {
-//   constexpr bool operator()(size_t Idx) const { return true; }
-// };
+static constexpr size_t N = 1024;
 
-const bool filterFunc(const size_t Idx) {
-  return true;
-}
+int main() {
+  queue q;
 
-template <typename T, access::mode M> class MName;
+  auto BOp = [](int x, int y) { return (x + y); };
 
-template <typename Name, typename T, class BinaryOperation>
-void tests(queue &Q, T Identity, T Init, BinaryOperation BOp, size_t WGSize,
-           size_t NWItems) {
-  nd_range<1> NDRange(range<1>{NWItems}, range<1>{WGSize});
+  // Ranges to be used:
+  nd_range<1> NDRange(range<1>{N}, range<1>{1});
   range<1> GlobalRange = NDRange.get_global_range();
-  buffer<T, 1> InBuf(GlobalRange);
-  buffer<T, 1> OutBuf(1);
 
-  // Initialize.
-  std::optional<T> CorrectOut;
-
-  // The value assigned here must be discarded (if IsReadWrite is true).
-  // Verify that it is really discarded and assign some value.
-  host_accessor(OutBuf, write_only)[0] = Init;
-
-  //initInputData(InBuf, CorrectOut, BOp, GlobalRange, IdFilterFunc);
-  size_t N = GlobalRange.size();
-  host_accessor In_h(InBuf, write_only);
-  for (int I = 0; I < N; ++I) {
-    In_h[I] = ((I + 1) % 5) + 1.1;
-    if (filterFunc(I))
-      CorrectOut = CorrectOut ? BOp(*CorrectOut, In_h[I]) : In_h[I];
+  // Initialize input, calculate correct output:
+  int CorrectOut = 0;
+  std::vector<int> In(N);
+  for (int i = 0; i < N; ++i) {
+    In[i] = ((i + 1) % 5) + 1;
+    CorrectOut = BOp(CorrectOut, In[i]);
   }
-  CorrectOut = CorrectOut ? BOp(*CorrectOut, Init) : Init;
+  buffer<int, 1> InBuf(In.data(), GlobalRange);
 
-  // Compute.
-  Q.submit([&](handler &CGH) {
-     auto In = InBuf.template get_access<access::mode::read>(CGH);
-     auto Redu = reduction(OutBuf, CGH, BOp, {});
-     CGH.parallel_for<Name>(NDRange, Redu, [=](nd_item<1> NDIt, auto &Sum) {
-       if (filterFunc(NDIt.get_global_linear_id()))
-         Sum.combine(In[NDIt.get_global_linear_id()]);
+  // Initialize output:
+  int Out = 0;
+  buffer<int, 1> OutBuf{&Out, 1};
+
+  // Compute:
+  q.submit([&](handler &CGH) {
+     auto InAcc = InBuf.get_access<access_mode::read>(CGH);
+     auto Redu = reduction(OutBuf, CGH, BOp);
+     CGH.parallel_for<class Name>(NDRange, Redu, [=](nd_item<1> NDIt, auto &Sum) {
+       Sum.combine(InAcc[NDIt.get_global_linear_id()]);
      });
    }).wait();
 
   // Check correctness.
-  host_accessor Out(OutBuf, read_only);
-  T ComputedOut = *(Out.get_pointer());
-  checkResults(Q, BOp, NDRange, ComputedOut, *CorrectOut);
+  host_accessor ComputedOut{OutBuf, read_only};
+  std::cout << ComputedOut[0] << " : " << CorrectOut << std::endl;
 
-  //test<KName<Name, true>>(Q, Identity, Init, BOp, NDRange);
-}
-
-int main() {
-  queue Q;
-  printDeviceInfo(Q);
-  tests<class A1, int>(
-      Q, 0, 9, [](auto x, auto y) { return (x + y); }, 1, 1024);
-  return 1;
+  return ComputedOut[0] != CorrectOut;
 }
