@@ -37,7 +37,6 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/IOSandbox.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -7913,16 +7912,13 @@ void SYCLIntegrationHeader::emit(raw_ostream &O) {
 bool SYCLIntegrationHeader::emit(StringRef IntHeaderName) {
   if (IntHeaderName.empty())
     return false;
-  auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
-  int IntHeaderFD = 0;
-  std::error_code EC =
-      llvm::sys::fs::openFileForWrite(IntHeaderName, IntHeaderFD);
+  std::error_code EC;
+  llvm::raw_fd_ostream Out(IntHeaderName, EC);
   if (EC) {
     llvm::errs() << "Error: " << EC.message() << "\n";
     // compilation will fail on absent include file - don't need to fail here
     return false;
   }
-  llvm::raw_fd_ostream Out(IntHeaderFD, true /*close in destructor*/);
   emit(Out);
   return true;
 }
@@ -8017,16 +8013,13 @@ void SYCLIntegrationFooter::addVarDecl(const VarDecl *VD) {
 bool SYCLIntegrationFooter::emit(StringRef IntHeaderName) {
   if (IntHeaderName.empty())
     return false;
-  auto BypassSandbox = llvm::sys::sandbox::scopedDisable();
-  int IntHeaderFD = 0;
-  std::error_code EC =
-      llvm::sys::fs::openFileForWrite(IntHeaderName, IntHeaderFD);
+  std::error_code EC;
+  llvm::raw_fd_ostream Out(IntHeaderName, EC);
   if (EC) {
     llvm::errs() << "Error: " << EC.message() << "\n";
     // compilation will fail on absent include file - don't need to fail here
     return false;
   }
-  llvm::raw_fd_ostream Out(IntHeaderFD, true /*close in destructor*/);
   return emit(Out);
 }
 
